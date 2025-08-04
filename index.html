@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sistem Kas Kelas</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #aaa; padding: 8px; text-align: center; }
+    th { background-color: #f0f0f0; }
+    .nav { margin-bottom: 20px; }
+    .nav button { margin-right: 10px; padding: 5px 10px; cursor: pointer; }
+    .hidden { display: none; }
+    button { cursor: pointer; }
+    ul { list-style-type: none; padding: 0; }
+    ul li { margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Sistem Kas Kelas</h1>
+
+  <div class="nav">
+    <button onclick="showPage('kas')">Input Kas</button>
+    <button onclick="showPage('pengeluaran')">Input Pengeluaran</button>
+    <button onclick="showPage('total')">Lihat Total Kas</button>
+  </div>
+
+  <!-- Halaman Input Kas -->
+  <div id="kas" class="page">
+    <label>Bulan:
+      <select id="bulanSelect">
+        <option value="01">Januari</option>
+        <option value="02">Februari</option>
+        <option value="03">Maret</option>
+        <option value="04">April</option>
+        <option value="05">Mei</option>
+        <option value="06">Juni</option>
+        <option value="07">Juli</option>
+        <option value="08">Agustus</option>
+        <option value="09">September</option>
+        <option value="10">Oktober</option>
+        <option value="11">November</option>
+        <option value="12">Desember</option>
+      </select>
+    </label>
+    <label>Tahun:
+      <select id="tahunSelect">
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+      </select>
+    </label>
+    <table id="kasTable">
+      <thead>
+        <tr>
+          <th>Nama</th>
+          <th>Minggu 1</th>
+          <th>Minggu 2</th>
+          <th>Minggu 3</th>
+          <th>Minggu 4</th>
+          <th>Subtotal</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5"><b>Total</b></td>
+          <td id="totalSemua">Rp 0</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- Halaman Input Pengeluaran -->
+  <div id="pengeluaran" class="page hidden">
+    <h2>Input Pengeluaran</h2>
+    <form id="pengeluaranForm">
+      <input type="hidden" id="pengeluaranId" />
+      <label>Nama Barang: <input type="text" id="namaBarang" /></label><br/>
+      <label>Harga (Rp): <input type="number" id="hargaBarang" /></label><br/>
+      <label>Tanggal: <input type="date" id="tanggalBarang" /></label><br/>
+      <button type="submit">Simpan Pengeluaran</button>
+    </form>
+  </div>
+
+  <!-- Halaman Total Kas -->
+  <div id="total" class="page hidden">
+    <h2>Total Kas Keseluruhan</h2>
+    <p id="totalKasKeseluruhan">Rp 0</p>
+    <h3>Daftar Pengeluaran:</h3>
+    <ul id="daftarPengeluaran"></ul>
+  </div>
+
+  <script>
+    const siswa = [
+      "Achmad Ragil Pakualam", "Afif Sinichi Ibrahim", "Arkan Said Ramadhan",
+      "Erlangga Alfath Maulana Akbar", "Fadhilla Nabil Al Fawwaz",
+      "Fayiz Iffat Asyrofi", "Galen Alzena Zaidaan", "Muhammad Faiq Mahmudi",
+      "Muhammad Hafidz Ihsan", "Muhammad Khaerul Fachri", "Musthafa Zaid Haritsah",
+      "Rakha Purwa Ramadhan"
+    ];
+    const HARGA_PER_PEKAN = 5000;
+
+    const bulanSelect = document.getElementById("bulanSelect");
+    const tahunSelect = document.getElementById("tahunSelect");
+    const tableBody = document.querySelector("#kasTable tbody");
+    const totalCell = document.getElementById("totalSemua");
+    const pengeluaranForm = document.getElementById("pengeluaranForm");
+
+    bulanSelect.addEventListener("change", buatTabel);
+    tahunSelect.addEventListener("change", buatTabel);
+    pengeluaranForm.addEventListener("submit", simpanPengeluaran);
+
+    function showPage(id) {
+      document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+      document.getElementById(id).classList.remove('hidden');
+      if (id === 'total') hitungTotalKeseluruhan();
+    }
+
+    async function buatTabel() {
+      tableBody.innerHTML = "";
+      const tahun = tahunSelect.value;
+      const bulan = bulanSelect.value;
+      try {
+        const response = await fetch(`http://localhost:3000/iuran/${tahun}/${bulan}`);
+        const data = await response.json();
+
+        const iuranMap = {};
+        data.forEach(item => {
+          iuranMap[item.siswa_id] = [item.minggu_1, item.minggu_2, item.minggu_3, item.minggu_4];
+        });
+
+        siswa.forEach((nama, i) => {
+          const row = document.createElement("tr");
+          let checkboxes = "";
+          let subtotal = 0;
+          const iuran = iuranMap[i] || [false, false, false, false];
+          for (let p = 0; p < 4; p++) {
+            const checked = iuran[p] ? "checked" : "";
+            if (checked) subtotal += HARGA_PER_PEKAN;
+            checkboxes += `<td><input type="checkbox" data-siswa="${i}" data-pekan="${p}" ${checked}></td>`;
+          }
+          row.innerHTML = `
+            <td>${nama}</td>
+            ${checkboxes}
+            <td id="subtotal-${i}">${formatRupiah(subtotal)}</td>
+          `;
+          tableBody.appendChild(row);
+        });
+
+        document.querySelectorAll("input[type='checkbox']").forEach(cb => {
+          cb.addEventListener("change", async () => {
+            await simpanDataKas();
+            hitungSemua();
+          });
+        });
+
+        hitungSemua();
+      } catch (error) {
+        alert("Gagal ambil data iuran: " + error.message);
+      }
+    }
+
+    async function simpanDataKas() {
+      const tahun = tahunSelect.value;
+      const bulan = bulanSelect.value;
+      try {
+        for (let i = 0; i < siswa.length; i++) {
+          const data = {
+            tahun,
+            bulan,
+            siswa_id: i,
+            minggu_1: document.querySelector(`input[data-siswa='${i}'][data-pekan='0']`).checked,
+            minggu_2: document.querySelector(`input[data-siswa='${i}'][data-pekan='1']`).checked,
+            minggu_3: document.querySelector(`input[data-siswa='${i}'][data-pekan='2']`).checked,
+            minggu_4: document.querySelector(`input[data-siswa='${i}'][data-pekan='3']`).checked
+          };
+          await fetch('http://localhost:3000/iuran', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+        }
+      } catch (error) {
+        alert("Gagal simpan iuran: " + error.message);
+      }
+    }
+
+    function hitungSemua() {
+      let total = 0;
+      siswa.forEach((_, i) => {
+        let subtotal = 0;
+        for (let p = 0; p < 4; p++) {
+          const cb = document.querySelector(`input[data-siswa='${i}'][data-pekan='${p}']`);
+          if (cb && cb.checked) subtotal += HARGA_PER_PEKAN;
+        }
+        document.getElementById(`subtotal-${i}`).innerText = formatRupiah(subtotal);
+        total += subtotal;
+      });
+      totalCell.innerText = formatRupiah(total);
+    }
+
+    async function simpanPengeluaran(e) {
+      e.preventDefault();
+      const id = document.getElementById("pengeluaranId").value;
+      const nama = document.getElementById("namaBarang").value;
+      const harga = parseInt(document.getElementById("hargaBarang").value);
+      const tanggal = document.getElementById("tanggalBarang").value;
+
+      if (!nama || isNaN(harga) || !tanggal) return alert("Lengkapi semua data!");
+
+      try {
+        const data = { nama_barang: nama, harga, tanggal };
+        const url = id ? `http://localhost:3000/pengeluaran/${id}` : 'http://localhost:3000/pengeluaran';
+        const method = id ? 'PUT' : 'POST';
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error('Gagal menyimpan pengeluaran');
+        document.getElementById("pengeluaranId").value = "";
+        document.getElementById("namaBarang").value = "";
+        document.getElementById("hargaBarang").value = "";
+        document.getElementById("tanggalBarang").value = "";
+        alert(id ? "Pengeluaran diupdate!" : "Pengeluaran disimpan!");
+        if (document.getElementById("total").classList.contains('hidden')) {
+          showPage('total');
+        } else {
+          hitungTotalKeseluruhan();
+        }
+      } catch (error) {
+        alert("Gagal simpan pengeluaran: " + error.message);
+      }
+    }
+
+    async function editPengeluaran(id, nama, harga, tanggal) {
+      document.getElementById("pengeluaranId").value = id;
+      document.getElementById("namaBarang").value = nama;
+      document.getElementById("hargaBarang").value = harga;
+      document.getElementById("tanggalBarang").value = tanggal;
+      showPage('pengeluaran');
+    }
+
+    async function hapusPengeluaran(id) {
+      if (confirm("Yakin mau hapus pengeluaran ini?")) {
+        try {
+          const response = await fetch(`http://localhost:3000/pengeluaran/${id}`, { method: 'DELETE' });
+          if (!response.ok) throw new Error('Gagal menghapus pengeluaran');
+          hitungTotalKeseluruhan();
+        } catch (error) {
+          alert("Gagal hapus pengeluaran: " + error.message);
+        }
+      }
+    }
+
+    async function hitungTotalKeseluruhan() {
+      try {
+        const totalResponse = await fetch('http://localhost:3000/total');
+        const { total } = await totalResponse.json();
+        document.getElementById("totalKasKeseluruhan").innerText = formatRupiah(total);
+
+        const pengeluaranResponse = await fetch('http://localhost:3000/pengeluaran');
+        const pengeluaran = await pengeluaranResponse.json();
+        const ul = document.getElementById("daftarPengeluaran");
+        ul.innerHTML = "";
+        pengeluaran.forEach(item => {
+          const li = document.createElement("li");
+          li.innerHTML = `${item.tanggal} - ${item.nama_barang}: ${formatRupiah(item.harga)} 
+            <button onclick="editPengeluaran(${item.id}, '${item.nama_barang.replace(/'/g, "\\'")}', ${item.harga}, '${item.tanggal}')">Edit</button>
+            <button onclick="hapusPengeluaran(${item.id})">Hapus</button>`;
+          ul.appendChild(li);
+        });
+      } catch (error) {
+        alert("Gagal ambil data total: " + error.message);
+      }
+    }
+
+    function formatRupiah(angka) {
+      return 'Rp ' + (angka || 0).toLocaleString('id-ID');
+    }
+
+    buatTabel();
+  </script>
+</body>
+</html>
